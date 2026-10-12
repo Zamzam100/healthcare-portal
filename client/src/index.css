@@ -54,3 +54,9 @@ button { font: inherit; cursor: pointer; }
 .empty { color: var(--muted); padding: 32px 0; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.status { padding: 4px 12px; border-radius: 999px; font-size: .875rem; font-weight: 600; background: #E7EBF0; color: var(--muted); text-transform: capitalize; }
+.status-scheduled { background: #E3E9FB; color: var(--primary); }
+.status-confirmed { background: var(--free-bg); color: var(--free-ink); }
+.status-cancelled { background: #FBE9E7; color: var(--danger); }
+.history { margin: 40px 0 0; font-size: 1.1rem; color: var(--muted); }
