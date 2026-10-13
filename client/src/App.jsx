@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth';
 import Doctors from './pages/Doctors';
 import Login from './pages/Login';
 import Appointments from './pages/Appointments';
+import Documents from './pages/Documents';
 
 function Header() {
   const { user, logout } = useAuth();
@@ -13,6 +14,7 @@ function Header() {
         {user ? (
   <>
     <NavLink to="/appointments">{user.role === 'doctor' ? 'Schedule' : 'My appointments'}</NavLink>
+    {user.role === 'patient' && <NavLink to="/documents">Documents</NavLink>}
     <span>{user.name}</span>
     <button className="btn quiet" onClick={logout}>Sign out</button>
   </>
@@ -34,6 +36,7 @@ export default function App() {
             <Route path="/" element={<Doctors />} />
             <Route path="/login" element={<Login />} />
             <Route path="/appointments" element={<Appointments />} />
+            <Route path="/documents" element={<Documents />} />
           </Routes>
         </main>
       </AuthProvider>

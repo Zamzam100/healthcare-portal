@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 test-auth.ps1
 test-booking.ps1
+uploads/
