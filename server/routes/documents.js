@@ -140,5 +140,39 @@ router.delete('/:id', authorize('patient'), async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+// Summarize one of my documents with the AI service
+router.post('/:id/summarize', authorize('patient'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(404).json({ message: 'Document not found' });
 
+    const r = await pool.query('SELECT * FROM documents WHERE id = $1 AND owner_id = $2', [
+      id,
+      req.user.id,
+    ]);
+    const doc = r.rows[0];
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+    const bytes = await fs.promises.readFile(path.join(UPLOAD_DIR, doc.file_url));
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: doc.mime_type }), doc.file_name);
+
+    const ai = await fetch(`${process.env.AI_SERVICE_URL}/summarize`, {
+      method: 'POST',
+      headers: { 'x-service-key': process.env.AI_SERVICE_KEY },
+      body: form,
+      signal: AbortSignal.timeout(90_000),
+    });
+    if (!ai.ok) {
+      return res.status(502).json({ message: 'The summary service could not process this document. Please try again.' });
+    }
+
+    const summary = await ai.json();
+    await pool.query('UPDATE documents SET ai_summary = $1 WHERE id = $2', [JSON.stringify(summary), id]);
+    res.json({ summary });
+  } catch (e) {
+    console.error('Summarize failed:', e.message); // never log document contents
+    res.status(502).json({ message: 'The summary service is unavailable right now.' });
+  }
+});
 module.exports = router;
