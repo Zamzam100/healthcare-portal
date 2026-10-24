@@ -6,3 +6,4 @@ __pycache__/
 test-auth.ps1
 test-booking.ps1
 uploads/
+check-secrets.ps1

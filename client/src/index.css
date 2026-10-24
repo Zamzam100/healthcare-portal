@@ -62,3 +62,13 @@ button { font: inherit; cursor: pointer; }
 .history { margin: 40px 0 0; font-size: 1.1rem; color: var(--muted); }
 .upload { display: grid; gap: 6px; max-width: 420px; margin-bottom: 24px; font-size: 1rem; font-weight: 600; color: var(--ink); }
 .upload small { font-weight: 400; color: var(--muted); }
+.summary { margin-top: 16px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: grid; gap: 16px; }
+.summary h3 { margin: 0 0 6px; font-size: 1rem; }
+.summary p, .summary ul { margin: 0; }
+.summary ul { padding-left: 20px; }
+.summary dl { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 4px 16px; margin: 0; }
+.summary dt { color: var(--muted); }
+.summary dd { margin: 0; }
+.flag { background: #FFF3D6; color: #7A5200; padding: 10px 12px; border-radius: var(--radius); margin-bottom: 8px !important; }
+.disclaimer { font-size: .875rem; color: var(--muted); }
+.consent { font-size: .875rem; color: var(--muted); margin: 8px 0 0; }

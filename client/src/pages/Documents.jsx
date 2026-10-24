@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import Summary from '../components/Summary';
 
 const fmt = (iso) =>
   new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -11,6 +12,7 @@ export default function Documents() {
   const [docs, setDocs] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [summarizing, setSummarizing] = useState(null);
   const fileInput = useRef(null);
 
   const load = useCallback(() => {
@@ -38,6 +40,19 @@ export default function Documents() {
     } finally {
       setBusy(false);
       if (fileInput.current) fileInput.current.value = '';
+    }
+  }
+
+  async function summarize(doc) {
+    setSummarizing(doc.id);
+    setError('');
+    try {
+      await api(`/documents/${doc.id}/summarize`, { method: 'POST' });
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSummarizing(null);
     }
   }
 
@@ -83,6 +98,9 @@ export default function Documents() {
         <input ref={fileInput} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={upload} disabled={busy} />
         <small>PDF, JPG or PNG, up to 10 MB.</small>
       </label>
+      <p className="consent">
+        Summaries are written by an AI service. When you choose "Summarize with AI", the document is sent to it for processing.
+      </p>
 
       {busy && <p className="empty">Uploading…</p>}
       {error && <div className="note err" role="alert">{error}</div>}
@@ -96,10 +114,14 @@ export default function Documents() {
               <div className="facts"><span>Uploaded {fmt(d.uploaded_at)}</span></div>
             </div>
             <div className="actions">
+              <button className="btn" onClick={() => summarize(d)} disabled={summarizing === d.id}>
+                {summarizing === d.id ? 'Summarizing…' : d.ai_summary ? 'Summarize again' : 'Summarize with AI'}
+              </button>
               <button className="btn quiet" onClick={() => view(d)}>View</button>
               <button className="btn quiet" onClick={() => remove(d)}>Delete</button>
             </div>
           </div>
+          <Summary s={d.ai_summary} />
         </section>
       ))}
     </>

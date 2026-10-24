@@ -140,9 +140,15 @@ router.delete('/:id', authorize('patient'), async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 // Summarize one of my documents with the AI service
 router.post('/:id/summarize', authorize('patient'), async (req, res) => {
   try {
+    if (!process.env.AI_SERVICE_URL || !process.env.AI_SERVICE_KEY) {
+      console.error('AI_SERVICE_URL or AI_SERVICE_KEY is missing in server/.env');
+      return res.status(500).json({ message: 'The summary service is not set up on the server.' });
+    }
+
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(404).json({ message: 'Document not found' });
 
@@ -161,18 +167,32 @@ router.post('/:id/summarize', authorize('patient'), async (req, res) => {
       method: 'POST',
       headers: { 'x-service-key': process.env.AI_SERVICE_KEY },
       body: form,
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(150_000), // the AI provider can be slow when busy
     });
+
     if (!ai.ok) {
-      return res.status(502).json({ message: 'The summary service could not process this document. Please try again.' });
+      console.error('AI service returned status', ai.status);
+      return res
+        .status(502)
+        .json({ message: 'The summary service could not process this document. Please try again.' });
     }
 
     const summary = await ai.json();
-    await pool.query('UPDATE documents SET ai_summary = $1 WHERE id = $2', [JSON.stringify(summary), id]);
+    await pool.query('UPDATE documents SET ai_summary = $1 WHERE id = $2', [
+      JSON.stringify(summary),
+      id,
+    ]);
     res.json({ summary });
   } catch (e) {
-    console.error('Summarize failed:', e.message); // never log document contents
+    // Log the kind of failure, never document contents
+    console.error('Summarize failed:', e.name, e.message, e.cause?.code || '');
+    if (e.name === 'TimeoutError') {
+      return res
+        .status(504)
+        .json({ message: 'The summary took too long. Please try again in a minute.' });
+    }
     res.status(502).json({ message: 'The summary service is unavailable right now.' });
   }
 });
+
 module.exports = router;

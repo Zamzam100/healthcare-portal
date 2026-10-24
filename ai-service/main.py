@@ -1,5 +1,6 @@
 import hmac
 import os
+import time
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -11,7 +12,10 @@ from pydantic import BaseModel
 load_dotenv()
 
 AI_SERVICE_KEY = os.environ["AI_SERVICE_KEY"]
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest")
+THINKING_BUDGET = os.getenv("GEMINI_THINKING_BUDGET")  # optional: 0 switches thinking off
+RETRYABLE = {429, 500, 503, 504}
 MAX_BYTES = 10 * 1024 * 1024
 
 app = FastAPI(title="Healthcare AI service")
@@ -81,26 +85,42 @@ def generate_summary(data: bytes, mime: str) -> dict:
         return dict(MOCK_SUMMARY)
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    try:
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=[
-                types.Part.from_bytes(data=data, mime_type=mime),
-                "Summarize this document for the patient.",
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=Summary,  # forces structured output
-                temperature=0.2,
-            ),
-        )
-    except errors.APIError as e:
-        # Log the error code only: never log document contents
-        print("Gemini error code:", e.code)
-        raise HTTPException(status_code=502, detail="The AI provider could not process this document")
+    models = [MODEL, MODEL, FALLBACK_MODEL]  # try the main model twice, then a lighter one
+    response = None
 
-    if response.parsed is None:
+    config_args = dict(
+        system_instruction=SYSTEM_PROMPT,
+        response_mime_type="application/json",
+        response_schema=Summary,  # forces structured output
+        temperature=0.2,
+    )
+    if THINKING_BUDGET is not None:
+        config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=int(THINKING_BUDGET))
+
+    for attempt, model in enumerate(models):
+        started = time.time()
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=[
+                    types.Part.from_bytes(data=data, mime_type=mime),
+                    "Summarize this document for the patient.",
+                ],
+                config=types.GenerateContentConfig(**config_args),
+            )
+            print(f"Gemini call took {time.time() - started:.1f}s using {model}")
+            break
+        except errors.APIError as e:
+            # Log the error code only: never log document contents
+            print("Gemini error code:", e.code, f"after {time.time() - started:.1f}s", "attempt", attempt + 1)
+            if e.code not in RETRYABLE or attempt == len(models) - 1:
+                raise HTTPException(
+                    status_code=502,
+                    detail="The AI provider could not process this document",
+                )
+            time.sleep(1)  # short pause before trying again
+
+    if response is None or response.parsed is None:
         raise HTTPException(status_code=502, detail="No summary was produced")
     return response.parsed.model_dump()
 
@@ -127,6 +147,14 @@ def summarize(
     if len(data) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="File too large")
 
-    result = generate_summary(data, mime)
+    try:
+        result = generate_summary(data, mime)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Log only the error type and the start of its message, never the document
+        print("Unexpected error:", type(e).__name__, str(e)[:200])
+        raise HTTPException(status_code=502, detail="The AI provider could not process this document")
+
     result["disclaimer"] = DISCLAIMER  # added by our code so the model can't drop it
     return result
